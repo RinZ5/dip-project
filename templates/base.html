@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Civet Behavior Detector{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fog: #EEF1EE;       /* page: the grey-green of night IR footage */
+    --paper: #F8FAF8;     /* raised surfaces */
+    --ink: #1D2A27;       /* text */
+    --soft: #5E6B67;      /* secondary text */
+    --rule: #D3DAD6;      /* lines */
+    --moving: #C47F2A; --resting: #3F7A5C; --eating: #6F5A94; --unknown: #8E9893;
+    --focus: #2E6FA8;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --text: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box }
+  html { -webkit-text-size-adjust: 100% }
+  body { margin: 0; background: var(--fog); color: var(--ink); font: 16px/1.55 var(--text) }
+  a { color: inherit }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px }
+
+  .masthead { max-width: 1180px; margin: 0 auto; padding: 1.4rem 1.5rem .4rem; display: flex; align-items: baseline; gap: 1rem }
+  .masthead a { text-decoration: none; font: 700 1.15rem/1 var(--display); letter-spacing: -.01em }
+  .masthead .where { color: var(--soft); font-size: .9rem }
+  main { max-width: 1180px; margin: 0 auto; padding: 1rem 1.5rem 4rem }
+
+  h1 { font: 700 clamp(1.9rem, 3.6vw, 2.8rem)/1.08 var(--display); letter-spacing: -.02em; margin: 0 0 .5rem }
+  h2 { font: 700 1.35rem/1.2 var(--display); letter-spacing: -.01em; margin: 0 0 .75rem }
+  p { max-width: 68ch }
+  .soft { color: var(--soft) } .small { font-size: .88rem }
+  .num { text-align: right; font-variant-numeric: tabular-nums }
+
+  section { margin-top: 2.6rem }
+  .panel { background: var(--paper); border: 1px solid var(--rule); border-radius: 14px; padding: 1.25rem 1.4rem }
+
+  .btn { display: inline-flex; align-items: center; gap: .45rem; font: 700 .95rem/1 var(--text); color: var(--ink);
+         background: var(--paper); border: 1px solid var(--rule); border-radius: 999px; padding: .6rem 1.05rem; cursor: pointer; text-decoration: none }
+  .btn:hover { border-color: var(--soft) }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--fog) }
+  .btn.primary:hover { background: #2c3d39 }
+  .btn:disabled { opacity: .4; cursor: not-allowed }
+
+  .key { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap }
+  .key i { width: .8rem; height: .8rem; border-radius: 3px; display: inline-block }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums }
+  th, td { padding: .5rem .6rem; text-align: left; border-bottom: 1px solid var(--rule) }
+  th { font-weight: 700; font-size: .85rem; color: var(--soft) }
+
+  .meter { height: 6px; background: var(--rule); border-radius: 999px; overflow: hidden }
+  .meter > div { height: 100%; background: var(--ink); transition: width .4s }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important } }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="masthead">
+  <a href="{{ url_for('index') }}">Civet Behavior Detector</a>
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

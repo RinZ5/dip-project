@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+  .wait { max-width: 620px; margin: 3rem auto 0 }
+  .wait .meter { height: 10px; margin: 1.4rem 0 .6rem }
+  .wait .meter > div { background: var(--resting) }
+  .stage { font: 700 1.15rem/1.3 var(--display); margin: 0 }
+  .failed { color: #A33B2B }
+</style>
+{% endblock %}
+{% block content %}
+<div class="wait">
+  <h1>{{ j.name }}</h1>
+  <p class="stage" id="stage" aria-live="polite">{{ j.status | capitalize }}</p>
+  <div class="meter"><div id="bar" style="width:0"></div></div>
+  <p class="soft" id="detail"></p>
+  <p class="soft small">This page opens the results when they are ready; you can leave it open.</p>
+  <a class="btn" href="{{ url_for('index') }}">Back to recordings</a>
+</div>
+<script>
+  const fmt = s => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+                     return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+  let t0 = Date.now(), d0 = null;
+  async function poll() {
+    const r = await fetch("{{ url_for('status', jid=jid) }}").then(r => r.json());
+    if (r.status === 'done') { location.reload(); return; }
+    const stage = document.getElementById('stage');
+    if (r.status.startsWith('failed')) {
+      stage.textContent = 'The analysis stopped: ' + r.status.slice(8) + '. Check that the file is a playable video and upload it again.';
+      stage.classList.add('failed'); return;
+    }
+    stage.textContent = r.status.startsWith('rendering') ? 'Drawing the tracked video' : 'Watching the recording, one frame per second';
+    const p = r.total ? Math.min(100, 100 * r.done / r.total) : 0;
+    document.getElementById('bar').style.width = (r.status.startsWith('rendering') ? 100 : p) + '%';
+    if (d0 === null && r.done > 0) { d0 = r.done; t0 = Date.now(); }
+    let eta = '';
+    if (d0 !== null && r.done > d0 && r.total) eta = `, about ${fmt((r.total - r.done) / ((r.done - d0) / ((Date.now() - t0) / 1000)))} left`;
+    document.getElementById('detail').textContent = r.total ? `${fmt(r.done)} of ${fmt(r.total)} checked (${p.toFixed(0)}%)${eta}` : '';
+    setTimeout(poll, 2000);
+  }
+  poll();
+</script>
+{% endblock %}

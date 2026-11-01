@@ -1,0 +1,18 @@
+{
+  "classes": {
+    "0": "civet",
+    "1": "tray",
+    "2": "food"
+  },
+  "civet_conf": 0.25,
+  "tray_conf": 0.25,
+  "food_conf": 0.35,
+  "imgsz": 640,
+  "trained_from": "models/yolo11n_coco.pt",
+  "data": "data/labels/merged",
+  "val_map50": {
+    "civet": 0.995,
+    "tray": 0.995,
+    "food": 0.02
+  }
+}

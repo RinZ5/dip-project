@@ -1,0 +1,31 @@
+# your own data: put videos in videos/, notebook 1 writes labels/
+videos/*
+!videos/README.md
+labels/
+
+# models: only the starting model is shared (notebook 1 needs it to find objects)
+models/*
+!models/civet_yolo.pt
+!models/civet_yolo.json
+
+# data used for our own evaluation and experiments
+test_set/
+experiments/
+archive/
+
+# created by the app
+uploads/
+results/
+
+# Python environment, caches and tool settings
+.build/
+.venv/
+.claude/
+__pycache__/
+*.pyc
+*.cache
+.ipynb_checkpoints/
+.DS_Store
+*.log
+
+REPORT.md

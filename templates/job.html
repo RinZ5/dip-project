@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}{{ j.name }}: Civet Behavior Detector{% endblock %}
+{% block head %}
+<style>
+  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 1rem }
+  .head p { margin: .2rem 0 0 }
+  .downloads { display: flex; flex-wrap: wrap; gap: .5rem }
+
+  /* the night strip: the whole recording, one colour per second */
+  .night { margin-top: 1.6rem }
+  .strip { position: relative; height: 88px; border-radius: 12px; overflow: hidden; cursor: pointer;
+           background: repeating-linear-gradient(90deg, #DDE3DF 0 1px, #E6EBE8 1px 8px) }
+  .strip .seg { position: absolute; top: 0; bottom: 0; min-width: 2px }
+  .strip .play { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); pointer-events: none; left: 0 }
+  .clock { position: relative; height: 1.4rem; margin-top: .35rem; color: var(--soft); font-size: .85rem; font-variant-numeric: tabular-nums }
+  .clock span { position: absolute; transform: translateX(-50%); white-space: nowrap }
+  .clock span:first-child { transform: none } .clock span:last-child { transform: translateX(-100%) }
+  .keys { display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; margin-top: .9rem; font-size: .95rem }
+  .keys .key b { font-variant-numeric: tabular-nums }
+  .keys .key .pct { color: var(--soft) }
+
+  .watch { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 1.6rem; align-items: start }
+  @media (max-width: 900px) { .watch { grid-template-columns: 1fr } }
+  video { width: 100%; display: block; border-radius: 12px; background: #0e1513 }
+  .now { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .8rem; flex-wrap: wrap }
+  .now .label { display: flex; align-items: center; gap: .55rem; font: 700 1.3rem/1 var(--display) }
+  .now .label i { width: 1rem; height: 1rem; border-radius: 4px; background: var(--rule) }
+  .now .time { color: var(--soft); font-variant-numeric: tabular-nums }
+  .speed { display: flex; gap: .35rem } .speed .btn { padding: .4rem .7rem; font-size: .85rem }
+  .speed .btn[aria-pressed="true"] { background: var(--ink); color: var(--fog); border-color: var(--ink) }
+
+  .sheet-wrap { max-height: 470px; overflow: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper) }
+  .sheet { font-size: .95rem }
+  .sheet thead th { position: sticky; top: 0; background: var(--paper); z-index: 1 }
+  .sheet th.group { text-align: center; color: var(--ink); font-size: .9rem; border-bottom: 2px solid }
+  .sheet th.inactive { border-color: var(--resting) } .sheet th.active { border-color: var(--moving) }
+  .sheet td.inactive { color: var(--resting); font-weight: 700 } .sheet td.active { color: var(--moving); font-weight: 700 }
+  .sheet tbody tr { cursor: pointer } .sheet tbody tr:hover td { background: #EEF2EF }
+  .sheet tfoot td { position: sticky; bottom: 0; background: var(--paper); font-weight: 700; border-top: 2px solid var(--ink); border-bottom: 0 }
+  .sheet-note { margin: .6rem 0 0 }
+
+  .day { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1.6rem; align-items: start }
+  @media (max-width: 900px) { .day { grid-template-columns: 1fr } }
+  .hours td.nd { color: var(--unknown) }
+  .budget img { width: 100%; border-radius: 12px; background: #fff; border: 1px solid var(--rule) }
+
+  .runs { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .8rem }
+  .runs .btn[aria-pressed="false"] { opacity: .45 }
+  .runs .btn i { width: .7rem; height: .7rem; border-radius: 3px; display: inline-block }
+  .list-wrap { max-height: 380px; overflow: auto }
+  #ivs tr { cursor: pointer } #ivs tr:hover td { background: #EEF2EF } #ivs tr.cur td { background: #E3EAE6 }
+</style>
+{% endblock %}
+{% block content %}
+{% set summ = j.summary %}{% set total = j.total %}{% set intervals = j.intervals %}
+{% set present = total - summ.absent.seconds %}
+{% set ina = j.bouts | selectattr('state', 'equalto', 'inactive') | sum(attribute='minutes') %}
+{% set act = j.bouts | selectattr('state', 'equalto', 'active') | sum(attribute='minutes') %}
+
+<div class="head">
+  <div>
+    <h1>{{ j.name }}</h1>
+    <p class="soft">
+      {% if j.start %}Recorded {{ j.start.strftime('%-d %B %Y, from %H:%M') }}. {% endif %}
+      The civet was visible for {{ present | hms }} of {{ total | hms }}: {{ '%.1f' | format(act) }} min active and {{ '%.1f' | format(ina) }} min inactive.
+    </p>
+  </div>
+  <div class="downloads">
+    <a class="btn" href="{{ url_for('file', jid=jid, name='bouts.csv') }}" download>Observation sheet (CSV)</a>
+    <a class="btn" href="{{ url_for('file', jid=jid, name='hourly.csv') }}" download>Hourly table (CSV)</a>
+    <a class="btn" href="{{ url_for('file', jid=jid, name='per_second.csv') }}" download>Every second (CSV)</a>
+  </div>
+</div>
+
+<div class="night">
+  <div class="strip" id="strip" role="img" aria-label="Timeline of the recording, coloured by behavior. Click to play from that moment.">
+    {% for i in intervals %}<div class="seg" style="left:{{ 100 * i.start / total }}%;width:{{ 100 * i.duration / total }}%;background:{{ colors[i.label] }}"
+      title="{{ i.label | capitalize }}, {{ i.start | hms }} to {{ i.end | hms }} ({{ i.duration }} s)"></div>{% endfor %}
+    <div class="play" id="play"></div>
+  </div>
+  <div class="clock" id="clock"></div>
+  <div class="keys">
+    {% for b in behaviors %}<span class="key"><i style="background:{{ colors[b] }}"></i>{{ b | capitalize }} <b>{{ summ[b].seconds | hms }}</b> <span class="pct">{{ summ[b].pct }}%</span></span>{% endfor %}
+    <span class="key soft"><i style="background:#E0E6E2;border:1px solid var(--rule)"></i>Not visible</span>
+  </div>
+</div>
+
+<section class="watch">
+  <div>
+    <video id="v" controls muted playsinline src="{{ url_for('file', jid=jid, name='tracked.mp4') }}"></video>
+    <div class="now">
+      <div class="label"><i id="nowDot"></i><span id="nowLabel">Press play</span></div>
+      <div class="time" id="nowTime"></div>
+      <div class="speed" role="group" aria-label="Playback speed">
+        {% for r in [0.25, 0.5, 1, 2] %}<button class="btn rate" data-r="{{ r }}" aria-pressed="{{ 'true' if r == 1 else 'false' }}">{{ '%g' | format(r * speed) }}×</button>{% endfor %}
+      </div>
+    </div>
+    <p class="soft small">The video shows one frame per analysed second. The civet's box takes the behavior colour; the tray
+      box turns yellow when food is on it.</p>
+  </div>
+
+  <div>
+    <h2>Observation sheet</h2>
+    <div class="sheet-wrap">
+      <table class="sheet">
+        <thead>
+          <tr><th rowspan="2">No.</th><th colspan="2" class="group inactive">Inactive</th><th colspan="2" class="group active">Active</th><th rowspan="2" class="num">Min</th></tr>
+          <tr><th>Start</th><th>Stop</th><th>Start</th><th>Stop</th></tr>
+        </thead>
+        <tbody>
+          {% for b in j.bouts %}
+          <tr data-s="{{ b.start_s }}" tabindex="0">
+            <td>{{ b.no }}</td>
+            {% if b.state == 'inactive' %}<td class="inactive">{{ b.start }}</td><td class="inactive">{{ b.stop }}</td><td></td><td></td>
+            {% else %}<td></td><td></td><td class="active">{{ b.start }}</td><td class="active">{{ b.stop }}</td>{% endif %}
+            <td class="num">{{ '%.1f' | format(b.minutes) }}</td>
+          </tr>
+          {% else %}<tr><td colspan="6" class="soft">The civet was never seen moving, eating or resting in this recording.</td></tr>{% endfor %}
+        </tbody>
+        <tfoot><tr><td>Total</td><td colspan="2">{{ '%.1f' | format(ina) }} min</td><td colspan="2">{{ '%.1f' | format(act) }} min</td><td></td></tr></tfoot>
+      </table>
+    </div>
+    <p class="soft small sheet-note">{% if j.start %}Clock times from the file name.{% else %}Times from the start of the video (no clock time in the file name).{% endif %}
+      Pauses of up to 10 s don't split a bout. Select a row to play it.</p>
+  </div>
+</section>
+
+<section class="day">
+  <div>
+    <h2>Hour by hour</h2>
+    <div class="panel hours" style="padding:.3rem .9rem">
+      <table>
+        <thead><tr><th>Hour</th><th class="num">Active min</th><th class="num">Inactive min</th><th class="num">Visible min</th>
+          <th class="num">Visits</th><th class="num">Feeding</th><th class="num">Drinking</th><th class="num">Urine</th><th class="num">Feces</th></tr></thead>
+        <tbody>
+          {% for h in j.hourly %}<tr><td>{{ h.time }}</td><td class="num">{{ h.active_min }}</td><td class="num">{{ h.inactive_min }}</td>
+            <td class="num">{{ h.visible_min }}</td><td class="num">{{ h.visits }}</td><td class="num">{{ h.feeding }}</td>
+            <td class="num nd">{{ h.drinking }}</td><td class="num nd">{{ h.urine }}</td><td class="num nd">{{ h.feces }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="soft small">Visits count each time the civet comes into view; feeding counts eating bouts. Drinking, urine and
+      feces are not detected by this system (n/d).</p>
+  </div>
+  <div class="budget">
+    <h2>Time budget</h2>
+    <img src="{{ url_for('file', jid=jid, name='time_budget.png') }}" alt="Share of the civet's visible time spent on each behavior">
+  </div>
+</section>
+
+<section>
+  <h2>Every behavior run</h2>
+  {% if intervals %}
+  <div class="runs" id="filters" role="group" aria-label="Show behaviors">
+    {% for b in behaviors %}<button class="btn" data-b="{{ b }}" aria-pressed="true"><i style="background:{{ colors[b] }}"></i>{{ b | capitalize }}
+      <span class="soft">{{ intervals | selectattr('label', 'equalto', b) | list | length }}</span></button>{% endfor %}
+  </div>
+  <div class="panel list-wrap" style="padding:.3rem .9rem">
+    <table>
+      <thead><tr><th>Behavior</th><th class="num">From</th><th class="num">To</th><th class="num">Length</th></tr></thead>
+      <tbody id="ivs">
+        {% for i in intervals %}
+        <tr data-b="{{ i.label }}" data-s="{{ i.start }}" tabindex="0">
+          <td><span class="key"><i style="background:{{ colors[i.label] }}"></i>{{ i.label | capitalize }}</span></td>
+          <td class="num">{{ i.start | hms }}</td><td class="num">{{ i.end | hms }}</td><td class="num">{{ i.duration }} s</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="soft">No civet was found in this recording, so there is nothing to list.</p>{% endif %}
+</section>
+
+<script>
+  const v = document.getElementById('v'), SPEED = {{ speed }}, TOTAL = {{ total }};
+  const IV = {{ intervals | tojson }}, COLORS = {{ colors | tojson }};
+  const START = {{ (j.start.isoformat() if j.start else '') | tojson }};
+  const two = n => String(n).padStart(2, '0');
+  const clockAt = s => {          // clock time if the file name gave one, else time into the video
+    if (START) { const d = new Date(new Date(START).getTime() + s * 1000);
+      return `${two(d.getHours())}:${two(d.getMinutes())}` + (TOTAL < 3600 ? `:${two(d.getSeconds())}` : ''); }
+    s = Math.floor(s); return `${Math.floor(s / 3600)}:${two(Math.floor(s % 3600 / 60))}:${two(s % 60)}`;
+  };
+  // hour marks under the strip (or 5 even marks for short videos)
+  const clock = document.getElementById('clock');
+  const marks = [];
+  if (START && TOTAL > 3 * 3600) {
+    const t0 = new Date(START).getTime(), first = 3600 - (new Date(START).getMinutes() * 60 + new Date(START).getSeconds());
+    for (let s = first % 3600; s <= TOTAL; s += 3600) marks.push(s);
+  } else for (let k = 0; k <= 4; k++) marks.push(TOTAL * k / 4);
+  clock.innerHTML = marks.map(s => `<span style="left:${100 * s / TOTAL}%">${clockAt(s)}</span>`).join('');
+
+  const rows = [...document.querySelectorAll('#ivs tr')];
+  const seek = sec => { v.currentTime = sec / SPEED; v.play(); };
+  const at = sec => { let lo = 0, hi = IV.length - 1;          // run containing this second
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (sec < IV[m].start) hi = m - 1; else if (sec >= IV[m].end) lo = m + 1; else return IV[m]; }
+    return null; };
+  let last;
+  v.addEventListener('timeupdate', () => {
+    const sec = v.currentTime * SPEED, run = at(Math.floor(sec)), label = run ? run.label : null;
+    document.getElementById('play').style.left = (100 * sec / TOTAL) + '%';
+    document.getElementById('nowTime').textContent = clockAt(sec);
+    document.getElementById('nowLabel').textContent = label ? label[0].toUpperCase() + label.slice(1) : 'Not visible';
+    document.getElementById('nowDot').style.background = label ? COLORS[label] : 'var(--rule)';
+    if (run !== last) { last = run; rows.forEach(r => r.classList.toggle('cur', !!run && +r.dataset.s === run.start)); }
+  });
+  document.getElementById('strip').addEventListener('click', e => {
+    const r = e.currentTarget.getBoundingClientRect(); seek(TOTAL * (e.clientX - r.left) / r.width); });
+  const jump = r => { seek(+r.dataset.s); v.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+  [...rows, ...document.querySelectorAll('.sheet tbody tr[data-s]')].forEach(r => {
+    r.addEventListener('click', () => jump(r));
+    r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(r); } });
+  });
+  document.querySelectorAll('.rate').forEach(b => b.addEventListener('click', () => {
+    v.playbackRate = +b.dataset.r; document.querySelectorAll('.rate').forEach(x => x.setAttribute('aria-pressed', x === b)); }));
+  const hidden = new Set();
+  document.querySelectorAll('#filters .btn').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.b; hidden.has(k) ? hidden.delete(k) : hidden.add(k); b.setAttribute('aria-pressed', !hidden.has(k));
+    rows.forEach(r => r.style.display = hidden.has(r.dataset.b) ? 'none' : ''); }));
+</script>
+{% endblock %}
