@@ -30,6 +30,7 @@ VIDEO_SPEED = 4            # tracked video playback speed
 BEHAVIORS = ["moving", "resting", "eating", "unknown"]
 COLORS = {"moving": "#C47F2A", "resting": "#3F7A5C", "eating": "#6F5A94", "unknown": "#8E9893"}
 ACTIVITY = {"moving": "active", "eating": "active", "resting": "inactive"}
+SHEET = ["moving", "eating", "resting"]    # behaviors with their own columns on the observation sheet
 
 
 # --- video
@@ -161,9 +162,9 @@ def spans(rows, key):
 
 # active/inactive bouts for the observation sheet
 def bouts(rows, start=None):
-    return [dict(no=i + 1, state=b["state"], start=clock(b["start"], start), stop=clock(b["end"], start),
+    return [dict(no=i + 1, behavior=b["state"], start=clock(b["start"], start), stop=clock(b["end"], start),
                  start_s=b["start"], end_s=b["end"], minutes=round((b["end"] - b["start"]) / 60, 2))
-            for i, b in enumerate(spans(rows, lambda r: ACTIVITY.get(r["label"])))]
+            for i, b in enumerate(spans(rows, lambda r: r["label"] if r["label"] in SHEET else None))]
 
 
 # per-hour table
@@ -172,15 +173,14 @@ def hourly(rows, start=None):
     hour = lambda s: (base + dt.timedelta(seconds=s)).replace(minute=0, second=0)
     h = {}
     for r in rows:
-        x = h.setdefault(hour(r["second"]), dict(active=0, inactive=0, visible=0, visits=0, feeding=0))
-        if r["label"] in ACTIVITY: x[ACTIVITY[r["label"]]] += 1
+        x = h.setdefault(hour(r["second"]), dict({b: 0 for b in BEHAVIORS}, visible=0, visits=0, feeding=0))
+        if r["label"] in BEHAVIORS: x[r["label"]] += 1
         x["visible"] += r["label"] != "absent"
     for v in spans(rows, lambda r: None if r["label"] == "absent" else "visit"): h[hour(v["start"])]["visits"] += 1
     for e in spans(rows, lambda r: "eat" if r["label"] == "eating" else None): h[hour(e["start"])]["feeding"] += 1
     name = (lambda t: f"{t:%H:%M}-{t + dt.timedelta(hours=1):%H:%M}") if start else (lambda t: f"hour {int((t - base).total_seconds() // 3600) + 1}")
-    return [dict(time=name(t), active_min=round(x["active"] / 60, 1), inactive_min=round(x["inactive"] / 60, 1),
-                 visible_min=round(x["visible"] / 60, 1), visits=x["visits"], feeding=x["feeding"],
-                 drinking="n/d", urine="n/d", feces="n/d") for t, x in sorted(h.items())]
+    return [dict(time=name(t), **{f"{b}_min": round(x[b] / 60, 1) for b in BEHAVIORS}, visible_min=round(x["visible"] / 60, 1),
+                 visits=x["visits"], feeding=x["feeding"]) for t, x in sorted(h.items())]
 
 
 # runs of the same behavior, in seconds
@@ -252,7 +252,7 @@ app.jinja_env.filters["hms"] = lambda s: clock(int(s), None)
 
 @app.context_processor
 def page_globals():
-    return dict(colors=COLORS, behaviors=BEHAVIORS, min_rest=MIN_REST_S, speed=VIDEO_SPEED)
+    return dict(colors=COLORS, behaviors=BEHAVIORS, sheet=SHEET, min_rest=MIN_REST_S, speed=VIDEO_SPEED)
 
 
 # pages

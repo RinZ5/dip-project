@@ -2,6 +2,7 @@
 videos/*
 !videos/README.md
 labels/
+slides/
 
 # models: only the starting model is shared (notebook 1 needs it to find objects)
 models/*

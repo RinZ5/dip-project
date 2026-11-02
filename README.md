@@ -5,7 +5,7 @@ Labels a civet's behavior (moving, eating, resting) in CCTV video and builds an 
 ## Setup
 
 ```bash
-pip install -r requirements.txt     # Python 3.12
+pip install -r requirements.txt     # Python 3.10 or newer
 ```
 
 ## Run the app

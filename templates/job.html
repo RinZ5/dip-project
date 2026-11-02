@@ -19,7 +19,7 @@
   .keys .key b { font-variant-numeric: tabular-nums }
   .keys .key .pct { color: var(--soft) }
 
-  .watch { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 1.6rem; align-items: start }
+  .watch { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 1.6rem; align-items: start }
   @media (max-width: 900px) { .watch { grid-template-columns: 1fr } }
   video { width: 100%; display: block; border-radius: 12px; background: #0e1513 }
   .now { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .8rem; flex-wrap: wrap }
@@ -33,16 +33,17 @@
   .sheet { font-size: .95rem }
   .sheet thead th { position: sticky; top: 0; background: var(--paper); z-index: 1 }
   .sheet th.group { text-align: center; color: var(--ink); font-size: .9rem; border-bottom: 2px solid }
-  .sheet th.inactive { border-color: var(--resting) } .sheet th.active { border-color: var(--moving) }
-  .sheet td.inactive { color: var(--resting); font-weight: 700 } .sheet td.active { color: var(--moving); font-weight: 700 }
+  .sheet td.t { font-weight: 700; white-space: nowrap }
+  .sheet th, .sheet td { padding: .45rem .45rem }
   .sheet tbody tr { cursor: pointer } .sheet tbody tr:hover td { background: #EEF2EF }
   .sheet tfoot td { position: sticky; bottom: 0; background: var(--paper); font-weight: 700; border-top: 2px solid var(--ink); border-bottom: 0 }
   .sheet-note { margin: .6rem 0 0 }
 
-  .day { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1.6rem; align-items: start }
+  .day { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.6rem; align-items: start }
+  .hours th, .hours td { padding: .45rem .4rem } .hours td:first-child { white-space: nowrap }
   @media (max-width: 900px) { .day { grid-template-columns: 1fr } }
   .hours td.nd { color: var(--unknown) }
-  .budget img { width: 100%; border-radius: 12px; background: #fff; border: 1px solid var(--rule) }
+  .budget img { width: 100%; max-width: 440px; border-radius: 12px; background: #fff; border: 1px solid var(--rule) }
 
   .runs { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .8rem }
   .runs .btn[aria-pressed="false"] { opacity: .45 }
@@ -54,8 +55,7 @@
 {% block content %}
 {% set summ = j.summary %}{% set total = j.total %}{% set intervals = j.intervals %}
 {% set present = total - summ.absent.seconds %}
-{% set ina = j.bouts | selectattr('state', 'equalto', 'inactive') | sum(attribute='minutes') %}
-{% set act = j.bouts | selectattr('state', 'equalto', 'active') | sum(attribute='minutes') %}
+{% set act = (summ.moving.seconds + summ.eating.seconds) / 60 %}{% set ina = summ.resting.seconds / 60 %}
 
 <div class="head">
   <div>
@@ -104,20 +104,19 @@
     <div class="sheet-wrap">
       <table class="sheet">
         <thead>
-          <tr><th rowspan="2">No.</th><th colspan="2" class="group inactive">Inactive</th><th colspan="2" class="group active">Active</th><th rowspan="2" class="num">Min</th></tr>
-          <tr><th>Start</th><th>Stop</th><th>Start</th><th>Stop</th></tr>
+          <tr><th rowspan="2">No.</th>{% for b in sheet %}<th colspan="2" class="group" style="border-color:{{ colors[b] }}">{{ b | capitalize }}</th>{% endfor %}<th rowspan="2" class="num">Min</th></tr>
+          <tr>{% for b in sheet %}<th>Start</th><th>Stop</th>{% endfor %}</tr>
         </thead>
         <tbody>
           {% for b in j.bouts %}
           <tr data-s="{{ b.start_s }}" tabindex="0">
             <td>{{ b.no }}</td>
-            {% if b.state == 'inactive' %}<td class="inactive">{{ b.start }}</td><td class="inactive">{{ b.stop }}</td><td></td><td></td>
-            {% else %}<td></td><td></td><td class="active">{{ b.start }}</td><td class="active">{{ b.stop }}</td>{% endif %}
+            {% for c in sheet %}{% if c == b.behavior %}<td class="t" style="color:{{ colors[c] }}">{{ b.start }}</td><td class="t" style="color:{{ colors[c] }}">{{ b.stop }}</td>{% else %}<td></td><td></td>{% endif %}{% endfor %}
             <td class="num">{{ '%.1f' | format(b.minutes) }}</td>
           </tr>
-          {% else %}<tr><td colspan="6" class="soft">The civet was never seen moving, eating or resting in this recording.</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="{{ 2 + 2 * sheet | length }}" class="soft">The civet was never seen moving, eating or resting in this recording.</td></tr>{% endfor %}
         </tbody>
-        <tfoot><tr><td>Total</td><td colspan="2">{{ '%.1f' | format(ina) }} min</td><td colspan="2">{{ '%.1f' | format(act) }} min</td><td></td></tr></tfoot>
+        <tfoot><tr><td>Total</td>{% for c in sheet %}<td colspan="2">{{ '%.1f' | format(j.bouts | selectattr('behavior', 'equalto', c) | sum(attribute='minutes')) }} min</td>{% endfor %}<td></td></tr></tfoot>
       </table>
     </div>
     <p class="soft small sheet-note">{% if j.start %}Clock times from the file name.{% else %}Times from the start of the video (no clock time in the file name).{% endif %}
@@ -130,17 +129,15 @@
     <h2>Hour by hour</h2>
     <div class="panel hours" style="padding:.3rem .9rem">
       <table>
-        <thead><tr><th>Hour</th><th class="num">Active min</th><th class="num">Inactive min</th><th class="num">Visible min</th>
-          <th class="num">Visits</th><th class="num">Feeding</th><th class="num">Drinking</th><th class="num">Urine</th><th class="num">Feces</th></tr></thead>
+        <thead><tr><th>Hour</th>{% for b in behaviors %}<th class="num"><span class="key"><i style="background:{{ colors[b] }}"></i>{{ b | capitalize }}</span></th>{% endfor %}<th class="num">Visible</th>
+          <th class="num">Visits</th><th class="num">Feeding</th></tr></thead>
         <tbody>
-          {% for h in j.hourly %}<tr><td>{{ h.time }}</td><td class="num">{{ h.active_min }}</td><td class="num">{{ h.inactive_min }}</td>
-            <td class="num">{{ h.visible_min }}</td><td class="num">{{ h.visits }}</td><td class="num">{{ h.feeding }}</td>
-            <td class="num nd">{{ h.drinking }}</td><td class="num nd">{{ h.urine }}</td><td class="num nd">{{ h.feces }}</td></tr>{% endfor %}
+          {% for h in j.hourly %}<tr><td>{{ h.time }}</td>{% for b in behaviors %}<td class="num">{{ h[b ~ '_min'] }}</td>{% endfor %}
+            <td class="num">{{ h.visible_min }}</td><td class="num">{{ h.visits }}</td><td class="num">{{ h.feeding }}</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
-    <p class="soft small">Visits count each time the civet comes into view; feeding counts eating bouts. Drinking, urine and
-      feces are not detected by this system (n/d).</p>
+    <p class="soft small">Minutes per hour. Visits count each time the civet comes into view; feeding counts eating bouts.</p>
   </div>
   <div class="budget">
     <h2>Time budget</h2>
